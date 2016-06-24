@@ -31,6 +31,7 @@
 using namespace std;
 
 void utils::printUsage(std::string progName){
+    cout << progName << ": Version: " PV2D_VERSION " (" PV2D_DATE ")" << endl;
   cout << "Usage: " << progName << " "
        << "[ -geo[metry] 1000x800 ] [-bg | -backgroundColor black ] "
        << "[ -c | -color yellow ] "

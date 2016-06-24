@@ -297,6 +297,7 @@ void appWindow::about(){
   string aboutStr = string("About ") + m_progName;
   static QMessageBox* about
     = new QMessageBox( aboutStr.c_str(),
+                       "Version: " PV2D_VERSION " (" PV2D_DATE ")\n"
                        "© Oleg Alexandrov        ", // extra space to make window bigger
                        QMessageBox::NoIcon, 1, 0, 0, this, 0, FALSE );
   about->setButtonText( 1, "OK" );
