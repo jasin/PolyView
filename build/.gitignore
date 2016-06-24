@@ -15,3 +15,6 @@ ipch/*
 qrc_polyview.cxx
 x64/*
 Release/*
+Makefile
+polyView2D
+
