@@ -92,6 +92,8 @@ inline bool lexLessThan(Box P, Box Q){
   return false;
 }
 
+#ifndef _MSC_VER    // TODO: trouble with '==' and '!=' Box templates - NOT USED?
+/////////////////////////////////////////////////////////////////////////////////
 template <typename Box>
 inline bool operator==(Box P, Box Q){
   return P.xl == Q.xl && P.xh == Q.xh && P.yl == Q.yl && P.yh == Q.yh;
@@ -101,6 +103,8 @@ template <typename Box>
 inline bool operator!=(Box P, Box Q){
   return ! (P == Q);
 }
+/////////////////////////////////////////////////////////////////////////////////
+#endif // #ifndef _MSC_VER
 
 template <typename Box>
 struct boxNode{

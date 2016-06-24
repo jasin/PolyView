@@ -25,6 +25,29 @@
 #include <vector>
 #include <string>
 #include <sstream>
+#include <cmath>
+#ifndef M_PI
+#define M_PI 3.1415926535
+#endif
+
+#if (defined(_MSC_VER) && !defined(round))
+// provide a 'double round(double)' replacement, at least for MSVC WIN32 build
+static double round(double d)
+{
+    int res;
+    if (d < 0.0) {
+        res = (int)ceil(d);
+        if (((double)res - d) >= 0.5)
+            res--;
+    } else {
+        res = (int)floor(d);
+        if (( d - (double)res ) >= 0.5)
+            res++;
+    
+    }
+    return (double)res;
+}
+#endif
 
 namespace utils{
   

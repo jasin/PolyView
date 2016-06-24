@@ -1,0 +1,12 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+
+ <qresource>
+
+    <file>pvLogo.png</file>
+
+    <file>pv.ico</file>
+
+ </qresource>
+
+</RCC>

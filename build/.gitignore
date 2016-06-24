@@ -1,0 +1,17 @@
+*.vcxproj
+*.filters
+*.user
+CMakeCache.txt
+CMakeFiles/*
+RelWithDebInfo/*
+bldlog-1.txt
+cmake_install.cmake
+gui/*
+ipch/*
+*.sdf
+*.sln
+*.suo
+*.dir/*
+qrc_polyview.cxx
+x64/*
+Release/*

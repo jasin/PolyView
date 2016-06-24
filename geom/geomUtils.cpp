@@ -33,6 +33,8 @@
 using namespace std;
 using namespace utils;
 
+#define M_NUM_ANGLES 8
+
 std::ostream& operator<<(std::ostream& os, const anno& A){
   os << A.x << ' ' << A.y << ' ' << A.label << std::endl;
   return os;
@@ -48,8 +50,10 @@ void utils::snapPolyLineTo45DegAngles(bool isClosedPolyLine,
   if (numVerts <= 0) return;
 
   // The vectors corresponding to angles multiple of 45 degree
-  int numAngles = 8;
-  double xs[numAngles], ys[numAngles];
+
+  int numAngles = M_NUM_ANGLES; // seem this is a CONSTANT 8
+  // MSVC: Can NOT use a variable to assign stack
+  double xs[M_NUM_ANGLES], ys[M_NUM_ANGLES];
   for (int a = 0; a < numAngles; a++){
     double theta = a*45*M_PI/180;
     xs[a] = cos(theta);
