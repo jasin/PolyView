@@ -128,9 +128,10 @@ find_package ( Qt4 COMPONENTS QtCore QtGui QtNetwork QtWebkit QtXml QtXmlPattern
 include ( ${QT_USE_FILE} )
 add_definitions( ${QT_DEFINITIONS} )
 add_definitions( -DQT3_SUPPORT=1 )
+add_definitions( -DUSE_QT4_DEFS )
 # debug messages
-message(STATUS "*** include ( ${QT_USE_FILE} )")
-message(STATUS "*** add_definitions( ${QT_DEFINITIONS} )")
+message(STATUS "*** Qt4 found include ( ${QT_USE_FILE} )")
+message(STATUS "*** add_definitions( -DQT3_SUPPORT=1 -DUSE_QT4_DEFS ${QT_DEFINITIONS} )")
 ##############################################################
 endif ()
 
