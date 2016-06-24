@@ -13,6 +13,7 @@ ipch/*
 *.suo
 *.dir/*
 qrc_polyview.cxx
+qrc_polyview.cpp
 x64/*
 Release/*
 Makefile
