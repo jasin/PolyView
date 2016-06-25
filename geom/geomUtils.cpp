@@ -26,9 +26,9 @@
 #include <cfloat>
 #include <cstring>
 #include <cassert>
-#include <baseUtils.h>
-#include <geomUtils.h>
-#include <edgeUtils.h>
+#include "baseUtils.h"
+#include "geomUtils.h"
+#include "edgeUtils.h"
 
 using namespace std;
 using namespace utils;
@@ -36,7 +36,7 @@ using namespace utils;
 #define M_NUM_ANGLES 8
 
 std::ostream& operator<<(std::ostream& os, const anno& A){
-  os << A.x << ' ' << A.y << ' ' << A.label << std::endl;
+  os << A.x << ' ' << A.y << ' ' << A.annoLabel << std::endl;
   return os;
 }
 
@@ -207,29 +207,37 @@ void utils::minDistFromPtToSeg(//inputs
   return;
 }
 
-
-
-void utils::searchForColor(std::string lineStr, // input, not a reference on purpose
-                           std::string & color  // output
-                           ){
-
+// TODO: One day this table could be EXTERNAL to allow user choices
 //   const char * xgraph_colors[] =
 //     {"black", "white", "red", "blue", "green", "violet",
 //      "orange", "yellow", "pink", "cyan", "lightGray",
 //      "darkGray", "fuchsia", "aqua", "navy", "gold"};
 
-  const char * xgraph_colors[] =
+static const char * xgraph_colors[] = 
     {"black", "white", "red", "blue", "green", "violet", // 0,  ..., 5
      "orange", "yellow", "pink", "cyan", "#A2B5CD",      // 6,  ..., 10
      "#6C7B8B", "#FF00FF", "#00CDCD", "navy", "gold"     // 11, ..., 15
     };
 
+const char **utils::getColorTable(int *pCount)
+{
+    *pCount = sizeof(xgraph_colors)/sizeof(char*);
+    return xgraph_colors;
+}
+
+bool utils::searchForColor(std::string lineStr, // input, not a reference on purpose
+                           std::string & color  // output
+                           ){
+  
+
   char       * line  = (char*)lineStr.c_str();
   const char * col   = "color";
   char       * start = strstr(line, col);
 
-  if (start == NULL) return;
-  if (strlen(start) <= strlen(col)) return;
+  if (start == NULL) 
+      return false;
+  if (strlen(start) <= strlen(col))
+      return false;
   start += strlen(col);
 
   // Strip the equal sign, quotes, etc.
@@ -243,7 +251,8 @@ void utils::searchForColor(std::string lineStr, // input, not a reference on pur
 
   const char *delimiter = " \t";
   char * pch = strtok (start, delimiter);
-  if (pch == NULL) return;
+  if (pch == NULL)
+      return false;
 
   color = string(pch);
 
@@ -256,7 +265,7 @@ void utils::searchForColor(std::string lineStr, // input, not a reference on pur
     color = string( xgraph_colors[colorIndex] );
   }
 
-  return;
+  return true;
 }
 
 bool utils::searchForAnnotation(std::string lineStr, anno & annotation){
@@ -277,7 +286,7 @@ bool utils::searchForAnnotation(std::string lineStr, anno & annotation){
 
   annotation.x     = x;
   annotation.y     = y;
-  annotation.label = label;
+  annotation.annoLabel = label;
 
   return true;
 }
@@ -441,12 +450,12 @@ bool utils::mergePolys(int an,
 
   bool mergeWasSuccessful = false;
 
-  int i = 0, in = 0, j = 0;
+  int i = 0, in = 0, j = 0, jn = 0;
 
   // Start at a vertex of A which is not inside of B.
   for (int t = 0; t < an; t++){
     if (isPointInPolyOrOnEdges(ax[t], ay[t], bn, bx, by)) continue;
-    i = t; in = t; j = t;
+    i = t; in = t; j = t; jn = t;
     break;
   }
 
@@ -496,7 +505,7 @@ bool utils::mergePolys(int an,
           minDistA = distA;
           minDistB_beg = distB_beg;
           maxDistB_end = distB_end;
-          j = jl; ; x = xl; y = yl;
+          j = jl; jn = jnl; x = xl; y = yl;
         }
       }
     }

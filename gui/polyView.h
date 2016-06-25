@@ -22,7 +22,13 @@
 #ifndef POLYVIEW_H
 #define POLYVIEW_H
 
-#include <QPolygon>
+#ifdef USE_QT4_DEFS
+#include <Q3PointArray>
+#else // !#ifdef USE_QT4_DEFS
+#include <QPoint>
+// #include <qpointarray.h>
+#endif // #ifdef USE_QT4_DEFS y/n
+
 #include <QContextMenuEvent>
 #include <QEvent>
 #include <QKeyEvent>
@@ -31,18 +37,25 @@
 #include <QPixmap>
 #include <QWheelEvent>
 #include <QWidget>
+//Added by qt3to4:
+#include <QResizeEvent>
 #include <vector>
 #include <map>
-#include <utils.h>
-#include <chooseFilesDlg.h>
+#include "utils.h"
+#include "chooseFilesDlg.h"
 
-struct cmdLineOptions;
+class cmdLineOptions;
 
 class polyView : public QWidget{
   Q_OBJECT
 public:
   polyView(QWidget *parent, const cmdLineOptions & options);
   void runCmd(std::string cmd);
+#ifdef ADD_PREF_INI
+  void writeINI();
+  void readINI();
+#endif // ADD_PREF_INI
+  QWidget *m_parent;
 
 public slots:
 
@@ -53,6 +66,12 @@ public slots:
   void overwriteMultiplePolys();
   void saveAsMultiplePolys();
   void writeMultiplePolys(bool overwrite);
+#ifdef ADD_IMAGE_SAVE
+  void saveScreenImage();
+#endif // ADD_IMAGE_SAVE
+  void translatePolys();
+  void rotatePolys();
+  void scalePolys();
   void reloadPolys();
 
   // View menu
@@ -89,9 +108,6 @@ public slots:
   // Transform menu
   void enforce45();
   void enforce45AndSnapToGrid();
-  void translatePolys();
-  void rotatePolys();
-  void scalePolys();
 
   // Highlights menu
   void createHlt();
@@ -115,8 +131,6 @@ public slots:
   void turnOnMoveVertices();
   void turnOnMoveEdges();
   void toggleAlignMode();
-  void insertLabel();
-  void deleteLabel();
   void insertVertex();
   void deleteVertex();
   void deletePoly();
@@ -201,9 +215,16 @@ private:
 
   void createHighlightWithRealInputs(double xll, double yll, double xur, double yur);
 
+#ifdef USE_QT4_DEFS
   void printCurrCoords(const Qt::ButtonState & state, // input
                        int & currX, int  & currY      // in-out
                        );
+#else
+  void printCurrCoords(const Qt::KeyboardModifiers & state, // input - NOT USED!
+                       int & currX, int  & currY      // in-out
+                       );
+#endif 
+
   bool readOnePoly(// inputs
                    std::string   & filename,
                    bool            plotPointsOnly,
@@ -214,7 +235,11 @@ private:
   bool isClosestGridPtFree(std::vector< std::vector<int> > & Grid,
                            int x, int y);
   void initTextOnScreenGrid(std::vector< std::vector<int> > & Grid);
-  bool isPolyZeroDim(const QPolygon & pa);
+#ifdef USE_QT4_DEFS // ref Q3PointArray
+  bool isPolyZeroDim(const Q3PointArray & pa);  // Qt4 compat
+#else 
+  bool isPolyZeroDim(const QPolygon & pa);    // Qt5 sub Q3PointArray
+#endif
   void centerViewAtPoint(double x, double y);
   void drawOneVertex(int x0, int y0, QColor color, int lineWidth,
                      int drawVertIndex, QPainter * paint);
@@ -252,6 +277,11 @@ private:
   double m_viewXll, m_viewYll,   m_viewWidX,   m_viewWidY;
   double m_prevClickedX, m_prevClickedY;
   double m_screenRatio, m_pixelSize;
+
+  // GRABBED ON PRESS EVENT - polyView::mousePressEvent( QMouseEvent *E)
+  size_t m_mouseMods;   // = E->modifiers();
+  size_t m_mouseButt;   // = E->button(); - the cause left,mid,right
+  size_t m_mouseButs;   // = E->buttons(); - will include cause
 
   // Polygons
   std::vector<dPoly>       m_polyVec;
@@ -304,8 +334,9 @@ private:
 
   std::vector<int> m_polyVecOrder;
 
-  // To print point coordinates at the nm scale as opposed to the database unit
-  // (dbu) scale.
+  // Assume coordinatets are wsg84, and use Haversine to print distance in nm 
+  // formally this was times a scale 
+  // as opposed to the database unit (dbu) scale = RMS 
   bool m_useNmScale;
   double m_nmScale;
   std::string m_nmScaleFile;
@@ -345,6 +376,33 @@ private:
   bool m_alignMode;
   bool m_aligningPolysNow;
   utils::linTrans m_T, m_totalT;
+// #### GEN HEADER CODE ############################################## 
+// gen Qt5 header code, gen by qt42qt5.pl, on 2016/06/23 15:19:48 UTC.
+// Add 1 QMenu items to header
+// QMenu *menuMenu;
+// Add 20 QAction items to header
+ QAction *saveMarkAct;
+ QAction *toggleNmScaleAct;
+ QAction *create45DegreeIntPolyAct;
+ QAction *createArbitraryPolyAct;
+ QAction *deletePolyAct;
+ QAction *toggleAlignModeAct;
+ QAction *align_rotate90Act;
+ QAction *align_rotate180Act;
+ QAction *align_rotate270Act;
+ QAction *align_flip_against_x_axisAct;
+ QAction *align_flip_against_y_axisAct;
+ QAction *performAlignmentOfClosePolysAct;
+ QAction *turnOnMovePolysAct;
+ QAction *turnOnMoveVerticesAct;
+ QAction *turnOnMoveEdgesAct;
+ QAction *insertVertexAct;
+ QAction *deleteVertexAct;
+ QAction *copyPolyAct;
+ QAction *pastePolyAct;
+ QAction *reversePolyAct;
+// #### END GEN HEADER CODE ############################################## 
+ QAction *pvExitAct;
 
 };
 

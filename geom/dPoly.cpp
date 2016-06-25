@@ -28,8 +28,8 @@
 #include <cstring>
 #include <string>
 #include <map>
-#include <cutPoly.h>
-#include <dPoly.h>
+#include "cutPoly.h"
+#include "dPoly.h"
 using namespace std;
 using namespace utils;
 
@@ -391,14 +391,12 @@ void dPoly::scale(double scale){
 
   vector<anno> annotations;
   for (int annoType = 0; annoType < 3; annoType++){
-
     get_annoByType(annotations, annoType);
     for (int i = 0; i < (int)annotations.size(); i++){
       anno & A = annotations[i]; // alias
       A.x *= scale;
       A.y *= scale;
     }
-
     set_annoByType(annotations, annoType);
   }
 
@@ -579,7 +577,7 @@ void dPoly::compVertIndexAnno(){
       anno A;
       A.x     = xv[start + v];
       A.y     = yv[start + v];
-      A.label = num2str(v);
+      A.annoLabel = num2str(v); 
       m_vertIndexAnno.push_back(A);
     }
 
@@ -607,7 +605,7 @@ void dPoly::compLayerAnno(){
 
       A.x     = (xv[start + v] + xv[start + vn])/2.0; // put anno at midpt
       A.y     = (yv[start + v] + yv[start + vn])/2.0; // put anno at midpt
-      A.label = m_layers[pIter];
+      A.annoLabel = m_layers[pIter]; 
       m_layerAnno.push_back(A);
     }
 
@@ -1073,6 +1071,8 @@ void dPoly::enforce45(){
   return;
 };
 
+bool force_lower_case = true; // turning this OFF causes a PROBLEM
+
 bool dPoly::readPoly(std::string filename,
                      // If isPointCloud is true, treat each point as a
                      // singleton polygon
@@ -1095,39 +1095,70 @@ bool dPoly::readPoly(std::string filename,
   int beg = 0, end = 0;
 
   anno annotation;
-  string layer, line;
+  string layer, line, orgline;
   string color = "yellow"; // default color for polygons
+  int len, s;
 
   while( getline(fh, line) ) {
 
     bool isLastLine = ( fh.peek() == EOF );
 
+    orgline = line; // keep copy BEFORE lowercase
     // Convert to lowercase
+    if (force_lower_case) {
     transform(line.begin(), line.end(), line.begin(), ::tolower);
-
-    char * linePtr = (char*)line.c_str(); // To do: Avoid this casting hack.
-
-    // Replace comma with space, to be able to use comma as separator
-    for (int s = 0; s < (int)strlen(linePtr); s++){
-      if (linePtr[s] == ',') linePtr[s] = ' ';
     }
 
-    // Ignore any text after the comment character, which is '#' or '!'
-    for (int s = 0; s < (int)strlen(linePtr); s++){
-      if (linePtr[s] == '#' || linePtr[s] == '!'){
-        for (int t = s; t < (int)strlen(linePtr); t++){
-          linePtr[t] = '\0';
-        }
-        break;
+    char * linePtr = (char*)line.c_str(); // To do: Avoid this casting hack.
+    char * orgPtr  = (char *)orgline.c_str();
+
+    // Replace comma with space, to be able to use comma as separator
+    len = (int)strlen(linePtr);
+    for (s = 0; s < len; s++) {
+      if (linePtr[s] == ',') {
+          linePtr[s] = ' ';
+          orgPtr[s] = ' ';
       }
     }
 
     // If the current line has a color, store it in 'color'.
     // Else keep 'color' unchanged.
-    searchForColor(line, color);
+    if (searchForColor(line, color)) {
+        if (!isLastLine) {
+            continue;   // get next line
+        }
+    }
 
-    if ( searchForAnnotation(line, annotation) ){
+    // Ignore any text after the comment character, which is '#' or '!'
+    for (s = 0; s < len; s++){
+      if (linePtr[s] == '#' || linePtr[s] == '!'){
+        for (int t = s; t < (int)strlen(linePtr); t++){
+          linePtr[t] = '\0';
+            orgPtr[t] = '\0';
+        }
+        break;
+      }
+    }
+    len = (int)strlen(linePtr);
+    if (len == 0) {
+        if (!isLastLine) {
+            continue;
+        }
+    }
+#if 0 // 000000000000000000000000000000000
+    // If the current line has a color, store it in 'color'.
+    // Else keep 'color' unchanged.
+    if (searchForColor(line, color)) {
+        if (!isLastLine) {
+            continue;   // get next line
+        }
+    }
+#endif // 000000000000000000000000000000000000    
+    if ( searchForAnnotation(orgline, annotation) ) {
       m_annotations.push_back(annotation);
+        if (!isLastLine) {
+            continue; // get next line
+        }
     }
 
     // Extract the coordinates of the current vertex and the layer

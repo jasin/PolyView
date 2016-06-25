@@ -28,7 +28,7 @@
 
 class QWidget;
 class QTableWidget;
-struct polyOptions;
+class polyOptions;
 
 class chooseFilesDlg: public QDialog{
   Q_OBJECT

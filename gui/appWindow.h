@@ -22,14 +22,30 @@
 #ifndef EXAMPLE_H
 #define EXAMPLE_H
 
+#ifdef USE_QT4_DEFS
+#include <q3mainwindow.h>
+#else
 #include <qmainwindow.h>
+#endif // #ifdef USE_QT4_DEFS
 #include <qlineedit.h>
 #include <QEvent>
+//Added by qt3to4:
+#include <QCloseEvent>
 #include <string>
 #include <vector>
+
+#ifndef USE_QT4_DEFS
+QT_BEGIN_NAMESPACE
+class QAction;
+class QActionGroup;
+class QLabel;
+class QMenu;
+QT_END_NAMESPACE
+#endif
+
 class polyView;
 class QCloseEvent;
-struct cmdLineOptions;
+class cmdLineOptions;
 class QTextEdit;
 
 class cmdLine : public QLineEdit {
@@ -40,18 +56,25 @@ public:
   virtual ~cmdLine();
 };
 
+#ifdef USE_QT4_DEFS
+class docWindow: public Q3MainWindow{
+#else // ! #ifdef USE_QT4_DEFS
 class docWindow: public QMainWindow{
+#endif 
   Q_OBJECT
 
 public:
   docWindow(QWidget * parent = NULL);
   virtual ~docWindow();
   void setText(const std::string & docText);
-private:
   QTextEdit * m_textArea;
 };
 
+#ifdef USE_QT4_DEFS
+class appWindow: public Q3MainWindow{
+#else // ! #ifdef USE_QT4_DEFS
 class appWindow : public QMainWindow {
+#endif 
   Q_OBJECT
 
 public:
@@ -83,7 +106,82 @@ private:
   std::vector<std::string> m_cmdHist;
   int m_histPos;
   docWindow m_docWindow;
+#ifndef USE_QT4_DEFS
+     QMenu *fileMenu;
+
+    QAction *openAct;
+    QAction *saveoneAct;
+    QAction *savemultAct;
+    QAction *exitAct;
+    QAction *writeAct;
+#ifdef ADD_IMAGE_SAVE
+    QAction *imageAct;
+#endif
+
+// #### GEN HEADER CODE ############################################## 
+// gen Qt5 header code, gen by qt42qt5.pl, on 2016/06/21 00:31:55 UTC.
+// Add 8 QMenu items to header
+ QMenu *viewMenu;
+ QMenu *editMenu;
+ QMenu *selectionMenu;
+ QMenu *transformMenu;
+ QMenu *gridMenu;
+ QMenu *diffMenu;
+ QMenu *optionsMenu;
+ QMenu *helpMenu;
+// Add 46 QAction items to header
+ QAction *chooseFilesToShowAct;
+ QAction *zoomOutAct;
+ QAction *zoomInAct;
+ QAction *shiftLeftAct;
+ QAction *shiftRightAct;
+ QAction *shiftUpAct;
+ QAction *shiftDownAct;
+ QAction *resetViewAct;
+ QAction *changeOrderAct;
+ QAction *toggleAnnoAct;
+ QAction *toggleFilledAct;
+ QAction *togglePEAct;
+ QAction *toggleVertIndexAnnoAct;
+ QAction *toggleLayerAnnoAct;
+ QAction *undoAct;
+ QAction *redoAct;
+ QAction *create45DegreeIntPolyAct;
+ QAction *enforce45Act;
+ QAction *createArbitraryPolyAct;
+ QAction *mergePolysAct;
+ QAction *createHltAct;
+ QAction *cutToHltAct;
+ QAction *deleteSelectedPolysAct;
+ QAction *pasteSelectedPolysAct;
+ QAction *moveSelectedPolysAct;
+ QAction *deselectPolysDeleteHltsAct;
+ QAction *translateSelectedPolysAct;
+ QAction *rotateSelectedPolysAct;
+ QAction *scaleSelectedPolysAct;
+ QAction *transformSelectedPolysAct;
+ QAction *translatePolysAct;
+ QAction *rotatePolysAct;
+ QAction *scalePolysAct;
+ QAction *toggleShowGridAct;
+ QAction *enforce45AndSnapToGridAct;
+ QAction *setGridSizeAct;
+ QAction *setGridWidthAct;
+ QAction *setGridColorAct;
+ QAction *toggleDifferentColorsAct;
+ QAction *toggleShowPolyDiffAct;
+ QAction *plotNextDiffAct;
+ QAction *plotPrevDiffAct;
+ QAction *setLineWidthAct;
+ QAction *setBgColorAct;
+ QAction *showDocAct;
+ QAction *aboutAct;
+// #### END GEN HEADER CODE ############################################## 
+
+#endif
+
 };
 
 
 #endif
+// eof

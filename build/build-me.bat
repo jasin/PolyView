@@ -1,6 +1,6 @@
 @setlocal
 @set TMPPRJ=polyView
-@echo %TMPPRJ% - Uses Qt4 64-bits
+@echo %TMPPRJ% - Uses Qt5.1 64-bits
 @set TMPLOG=bldlog-1.txt
 @set DOTINST=0
 @set DOINSTALL=0
@@ -21,13 +21,13 @@
 
 :DNMSVC
 
-@REM call setupqt5.6
-@call setupqt64
+@call setupqt5.6
+@REM call setupqt64
 @cd %BLDDIR%
-@REM if "%Qt5_DIR%x" == "x" goto NOQT5
+@if "%Qt5_DIR%x" == "x" goto NOQT5
 
-@REM call chkpath C:\Qt\4.8.6\bin
-@REM if ERRORLEVEL 1 goto BADPATH
+@call chkpath C:\Qt\4.8.6\bin
+@if ERRORLEVEL 1 goto BADPATH
 
 @set TMPSRC=..
 @set TMPBGN=%TIME%
@@ -44,7 +44,8 @@
 @if NOT EXIST %TMPCM% goto NOCM
 
 @set TMPOPTS=-DCMAKE_INSTALL_PREFIX=%TMPINS% -G "Visual Studio 10 Win64"
-@REM set TMPOPTS=%TMPOPTS% -DCMAKE_PREFIX_PATH=%Qt5_DIR%
+@set TMPOPTS=%TMPOPTS% -DCMAKE_PREFIX_PATH=%Qt5_DIR%
+@set TMPOPTS=%TMPOPTS% -DQT5_BUILD:BOOL=ON
 
 :RPT
 @if "%~1x" == "x" goto GOTCMD

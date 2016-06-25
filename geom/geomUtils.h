@@ -47,10 +47,10 @@ struct anno {
 
   double x;
   double y;
-  std::string label;
+  std::string annoLabel;
 
   void appendTo(std::ofstream & outfile) const{
-    outfile << "anno " << x << ' ' << y << ' ' << label << std::endl;
+    outfile << "anno " << x << ' ' << y << ' ' << annoLabel << std::endl;
   }
 
 };
@@ -81,7 +81,9 @@ namespace utils{
 
   double signedPolyArea(int numV, const double* xv, const double* yv);
 
-  void searchForColor(std::string lineStr, // input, not a reference on purpose
+  const char **getColorTable(int *pCount);
+
+  bool searchForColor(std::string lineStr, // input, not a reference on purpose
                       std::string & color  // output
                       );
 
@@ -199,3 +201,4 @@ namespace utils{
 
 
 #endif
+  

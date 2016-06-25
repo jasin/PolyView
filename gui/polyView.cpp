@@ -19,11 +19,21 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
-#include <QPolygon>
+#ifdef USE_QT4_DEFS // Q3PointArray, and ... subs
+#include <Q3PointArray>
 #include <Q3PopupMenu>
+#include <Q3FileDialog>
+#else
+// #include <QPopupMenu>
+#include <QMenu>
+#endif
+
 #include <QContextMenuEvent>
 #include <QEvent>
+#ifdef ADD_IMAGE_SAVE
 #include <QFileDialog>
+#endif // ADD_IMAGE_SAVE
+
 #include <QHoverEvent>
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -32,6 +42,9 @@
 #include <QStylePainter>
 #include <QTableWidget>
 #include <QWheelEvent>
+//Added by qt3to4:
+#include <QResizeEvent>
+#include <QPixmap>
 #include <cassert>
 #include <cfloat>    // defines DBL_MAX
 #include <cmath>
@@ -43,10 +56,15 @@
 #include <qdir.h>
 #include <qinputdialog.h>
 #include <qpainter.h>
+#include "polyView.h"
 #include <qmessagebox.h>
+#ifdef WIN32
+#include <direct.h> // for _getcwd
+#define getcwd _getcwd
+#endif  // WIN32
+#include "utils.h"
 
-#include <gui/polyView.h>
-#include <gui/utils.h>
+#define KM2NM 0.53996
 
 using namespace std;
 using namespace utils;
@@ -63,9 +81,7 @@ using namespace utils;
 
 polyView::polyView(QWidget *parent, const cmdLineOptions & options): QWidget(parent){
 
-
-  installEventFilter(this);
-
+    m_parent = parent;
   // Choose which files to hide/show in the GUI
   QObject::connect(m_chooseFilesDlg.getFilesTable(),
                    SIGNAL(itemSelectionChanged()),
@@ -167,6 +183,13 @@ polyView::polyView(QWidget *parent, const cmdLineOptions & options): QWidget(par
   // Align mode
   m_alignMode = false;
 
+#ifdef ADD_PREF_INI
+  readINI();
+//  m_showAnnotations    = utils::loadSettingBool("m_showAnnotations",m_showAnnotations);
+//  m_showVertIndexAnno  = utils::loadSettingBool("m_showVertIndexAnno",m_showVertIndexAnno);
+//  m_showLayerAnno      = utils::loadSettingBool("m_showLayerAnno",m_showLayerAnno);
+#endif // ADD_PREF_INI
+
   resetTransformSettings();
 
   // This statement must be towards the end
@@ -189,7 +212,7 @@ bool polyView::eventFilter(QObject *obj, QEvent *E){
 
     const QPoint Q = H->pos(); // mouse point position
     int x = Q.x();
-    int y = Q.y();
+    int y = Q.y() - 25; // A hack as Qt does not give this number correctly
     double wx, wy;
     pixelToWorldCoords(x, y, wx, wy);
 
@@ -475,6 +498,7 @@ void polyView::plotDPoly(bool plotPoints, bool plotEdges,
 
     // Change the poly file color if it is the background color or invalid
     QColor color = QColor( colors[pIter].c_str() );
+#ifdef USE_QT4_DEFS
     if ( color == backgroundColor() || color == QColor::Invalid){
       if ( backgroundColor() != QColor("white") ){
         color = QColor("white");
@@ -482,6 +506,20 @@ void polyView::plotDPoly(bool plotPoints, bool plotEdges,
         color = QColor("black");
       }
     }
+#else
+    // #ifdef _MSC_VER
+    // #pragma message("TODO: DONE: set backglound color... I think...")
+    // #endif
+    QColor bkgnd = palette().color(QWidget::backgroundRole());
+    //QColor bkgnd = QWidget::palette().color(QWidget::backgroundRole());
+    if ( color == bkgnd || color == QColor::Invalid){
+      if ( bkgnd != QColor("white") ){
+        color = QColor("white");
+      }else{
+        color = QColor("black");
+      }
+    }
+#endif
 
     int pSize = numVerts[pIter];
 
@@ -491,7 +529,11 @@ void polyView::plotDPoly(bool plotPoints, bool plotEdges,
       signedArea = signedPolyArea(pSize, xv + start, yv + start);
     }
 
+#ifdef USE_QT4_DEFS // Q3PointArray
+    Q3PointArray pa(pSize);
+#else 
     QPolygon pa(pSize);
+#endif
     for (int vIter = 0; vIter < pSize; vIter++){
 
       int x0, y0;
@@ -517,15 +559,25 @@ void polyView::plotDPoly(bool plotPoints, bool plotEdges,
     if (plotEdges){
 
       if (plotFilled && isPolyClosed[pIter]){
-        if (signedArea >= 0.0) paint->setBrush( color );
-        else                   paint->setBrush( backgroundColor() );
+          if (signedArea >= 0.0) {
+              paint->setBrush( color );
+          } else {
+#ifdef USE_QT4_DEFS // backgroundColor()
+              paint->setBrush( backgroundColor() );
+#else
+    // #ifdef _MSC_VER
+    // #pragma message( "TODO: DONE: Get the backgroundColor()... I think" )
+    // #endif
+              paint->setBrush( bkgnd ); // backgroundColor() );
+#endif
+          }
         paint->setPen( Qt::NoPen );
       }else {
         paint->setBrush( Qt::NoBrush );
         paint->setPen( QPen(color, lineWidth) );
       }
 
-      if ( isPolyZeroDim(pa) ){
+      if ( pa.size() >= 1 && isPolyZeroDim(pa) ){
         // Treat the case of polygons which are made up of just one point
         int l_drawVertIndex = -1;
         drawOneVertex(pa[0].x(), pa[0].y(), color, lineWidth, l_drawVertIndex,
@@ -554,7 +606,9 @@ void polyView::plotDPoly(bool plotPoints, bool plotEdges,
     }
   }
 
-  // Plot the annotations
+    // Plot and PAINT the annotations
+    // TODO: Note 'fixed' annotation color!!!
+    // TODO: FAILS to correctly display UTF-8 hi-bit chars - maybe QString::fromUtf8???
   int numAnno = annotations.size();
   for (int aIter = 0; aIter < numAnno; aIter++){
     const anno & A = annotations[aIter];
@@ -564,7 +618,10 @@ void polyView::plotDPoly(bool plotPoints, bool plotEdges,
                        );
     paint->setPen( QPen(QColor("gold"), lineWidth) );
     if (isClosestGridPtFree(textOnScreenGrid, x0, y0)){
-      paint->drawText(x0, y0, (A.label).c_str());
+            paint->drawText(x0, y0, (A.annoLabel).c_str());
+            // maybe????
+            //QString s = QString::fromUtf8(A.annoLabel.c_str());
+            //paint->drawText(x0, y0, s);
     }
 
   } // End placing annotations
@@ -631,6 +688,10 @@ void polyView::mousePressEvent( QMouseEvent *E){
   const QPoint Q = E->pos();
   m_mousePrsX = Q.x();
   m_mousePrsY = Q.y();
+  // GRAB ALL ON PRESS EVENT
+  m_mouseMods = E->modifiers();
+  m_mouseButt = E->button();
+  m_mouseButs = E->buttons();
 
 #if 0
   cout << "Mouse pressed at "
@@ -771,6 +832,10 @@ void polyView::mouseReleaseEvent ( QMouseEvent * E ){
   cout << "Mouse released at "
        << m_mouseRelX << ' ' << m_mouseRelY << endl;
 #endif
+  // Qt::ShiftModifier, Qt::ControlModifier, Qt::AltModifier
+  Qt::KeyboardModifiers mods = E->modifiers();
+  // Qt::LeftButton, Qt::RightButton, Qt::MidButton 
+  Qt::MouseButtons buts = E->buttons();
 
   pixelToWorldCoords(m_mouseRelX, m_mouseRelY, m_menuX, m_menuY);
 
@@ -833,9 +898,20 @@ void polyView::mouseReleaseEvent ( QMouseEvent * E ){
       return;
     }
 
+#ifdef USE_QT4_DEFS
     printCurrCoords(E->state(),              // input
                     m_mouseRelX, m_mouseRelY // in-out
                     );
+#else
+//#ifdef _MSC_VER
+//#pragma message( "*** TODO: DONE: print the cooordinates" )
+//#endif
+    
+    printCurrCoords(E->modifiers(),              // input
+                    m_mouseRelX, m_mouseRelY // in-out
+                    );
+#endif // QT4 y/n
+
     return;
   }
 
@@ -850,8 +926,15 @@ bool polyView::isShiftLeftMouse(QMouseEvent * E){
 void polyView::wheelEvent(QWheelEvent *E){
 
   int delta = E->delta();
-
-  if (E->state() == Qt::ControlModifier){
+#ifdef USE_QT4_DEFS // QWheelEvent - detect control down
+  int gotctl = (E->state() == Qt::ControlModifier ? 1 : 0);
+#else
+//#ifdef _MSC_VER
+//#pragma message( "*** TODO: DONE: check for control and shift keys - seems ok" )
+//#endif
+  int gotctl = (E->modifiers() & Qt::ControlModifier ? 1 : 0);
+#endif
+  if (gotctl) {
 
     // The control button was pressed. Zoom in/out around the current point.
 
@@ -868,9 +951,13 @@ void polyView::wheelEvent(QWheelEvent *E){
     }
 
   }else{
-
     // Shift wheel goes left and right. Without shift we go up and down.
-    if (E->state() == Qt::ShiftModifier){
+#ifdef USE_QT4_DEFS // fix E->state() == Qt::ShiftModifier
+      int gotshift = (E->state() == Qt::ShiftModifier) ? 1 : 0;
+#else 
+      int gotshift = (E->modifiers() & Qt::ShiftModifier ? 1 : 0);
+#endif
+    if (gotshift) {
       if (delta > 0){
         shiftLeft();
       }else if (delta < 0){
@@ -918,11 +1005,13 @@ void polyView::keyPressEvent( QKeyEvent *K ){
 
 void polyView::contextMenuEvent(QContextMenuEvent *E){
 
-  int x = E->x(), y = E->y();
+  int x = E->x();
+  int y = E->y();
+
   pixelToWorldCoords(x, y, m_menuX, m_menuY);
 
+#ifdef USE_QT4_DEFS
   Q3PopupMenu menu(this);
-
   int id = 1;
 
   menu.insertItem("Save mark at point", this, SLOT(saveMark()));
@@ -936,6 +1025,23 @@ void polyView::contextMenuEvent(QContextMenuEvent *E){
   menu.insertItem("Create arbitrary polygon", this,
                   SLOT(createArbitraryPoly()));
   menu.insertItem("Delete polygon (Alt-Shift-Mouse)", this, SLOT(deletePoly()));
+  menu.addSeparator();
+
+  menu.insertItem("Align mode", this, SLOT(toggleAlignMode()), 0, id);
+  menu.setItemChecked(id, m_alignMode);
+  id++;
+    
+  if (m_alignMode){
+    menu.insertItem("Rotate  90 degrees",  this, SLOT(align_rotate90()));
+    menu.insertItem("Rotate 180 degrees",  this, SLOT(align_rotate180()));
+    menu.insertItem("Rotate 270 degrees",  this, SLOT(align_rotate270()));
+    menu.insertItem("Flip against x axis", this, SLOT(align_flip_against_x_axis()));
+    menu.insertItem("Flip against y axis", this, SLOT(align_flip_against_y_axis()));
+    menu.insertItem("Guess alignment", this,
+                    SLOT(performAlignmentOfClosePolys()));
+  }
+  
+  menu.addSeparator();
 
   menu.insertItem("Move polygons (Shift-Mouse)", this,
                   SLOT(turnOnMovePolys()), 0, id);
@@ -957,29 +1063,235 @@ void polyView::contextMenuEvent(QContextMenuEvent *E){
   menu.insertItem("Copy polygon",          this, SLOT(copyPoly()));
   menu.insertItem("Paste polygon",         this, SLOT(pastePoly()));
   menu.insertItem("Reverse orientation",   this, SLOT(reversePoly()));
-  menu.insertItem("Insert text label",     this, SLOT(insertLabel()));
-  menu.insertItem("Delete text label",     this, SLOT(deleteLabel()));
-
-  menu.addSeparator();
-
-  menu.insertItem("Align mode", this, SLOT(toggleAlignMode()), 0, id);
-  menu.setItemChecked(id, m_alignMode);
-  id++;
-
-  if (m_alignMode){
-    menu.insertItem("Rotate  90 degrees",  this, SLOT(align_rotate90()));
-    menu.insertItem("Rotate 180 degrees",  this, SLOT(align_rotate180()));
-    menu.insertItem("Rotate 270 degrees",  this, SLOT(align_rotate270()));
-    menu.insertItem("Flip against x axis", this, SLOT(align_flip_against_x_axis()));
-    menu.insertItem("Flip against y axis", this, SLOT(align_flip_against_y_axis()));
-    menu.insertItem("Guess alignment", this,
-                    SLOT(performAlignmentOfClosePolys()));
-  }
-
-  menu.addSeparator();
+  // TODO: menu.insertItem("Insert text label",     this, SLOT(insertLabel()));
+  // TODO: menu.insertItem("Delete text label",     this, SLOT(deleteLabel()));
 
   menu.exec(E->globalPos());
 
+#else
+    // Q3PopupMenu menu(this);
+    QMenu menu(this);
+    int id = 1;
+// #### GEN CODE ############################################## 
+// gen Qt5 code, gen by qt42qt5.pl, on 2016/06/23 15:19:48 UTC.
+  saveMarkAct = new QAction(tr("Save mark at point"),this);
+  saveMarkAct->setStatusTip(tr("Save mark at point"));
+  connect(saveMarkAct, SIGNAL(triggered()), this, SLOT(saveMark()));
+
+  toggleNmScaleAct = new QAction(tr("Toggle nm scale"),this);
+  toggleNmScaleAct->setStatusTip(tr("Toggle nm scale"));
+  //toggleNmScaleAct->setShortcut(0);
+  // menu.setItemChecked(id, m_useNmScale);
+  toggleNmScaleAct->setChecked(!m_useNmScale);
+  id++;
+  connect(toggleNmScaleAct, SIGNAL(triggered()), this, SLOT(toggleNmScale()));
+
+  create45DegreeIntPolyAct = new QAction(tr("Create 45-degree integer polygon"),this);
+  create45DegreeIntPolyAct->setStatusTip(tr("Create 45-degree integer polygon"));
+  connect(create45DegreeIntPolyAct, SIGNAL(triggered()), this, SLOT(create45DegreeIntPoly()));
+
+  createArbitraryPolyAct = new QAction(tr("Create arbitrary polygon"),this);
+  createArbitraryPolyAct->setStatusTip(tr("Create arbitrary polygon"));
+  connect(createArbitraryPolyAct, SIGNAL(triggered()), this, SLOT(createArbitraryPoly()));
+
+  deletePolyAct = new QAction(tr("Delete polygon (Alt-Shift-Mouse)"),this);
+  deletePolyAct->setStatusTip(tr("Delete polygon (Alt-Shift-Mouse)"));
+  connect(deletePolyAct, SIGNAL(triggered()), this, SLOT(deletePoly()));
+
+  // toggleAlignModeAct = new QAction(tr("Toggle Align mode"),this);
+  if (m_polyVec.size() < 2) {
+    toggleAlignModeAct = new QAction(tr("No Align mode toggle"),this);
+  } else {
+      if (m_alignMode) {
+        toggleAlignModeAct = new QAction(tr("Align mode to OFF"),this);
+      } else {
+        toggleAlignModeAct = new QAction(tr("Align mode to ON"),this);
+      }
+  }
+  toggleAlignModeAct->setStatusTip(tr("Toggle Align mode"));
+  //toggleAlignModeAct->setShortcut(0);
+  // menu.setItemChecked(id, m_alignMode);
+  toggleAlignModeAct->setChecked(m_alignMode);
+  id++;
+  connect(toggleAlignModeAct, SIGNAL(triggered()), this, SLOT(toggleAlignMode()));
+
+  // Only added if m_alignMode is ON
+  ////////////////////////////////////////////
+  align_rotate90Act = new QAction(tr("Rotate 90 degrees"),this);
+  align_rotate90Act->setStatusTip(tr("Rotate 90 degrees"));
+  connect(align_rotate90Act, SIGNAL(triggered()), this, SLOT(align_rotate90()));
+
+  align_rotate180Act = new QAction(tr("Rotate 180 degrees"),this);
+  align_rotate180Act->setStatusTip(tr("Rotate 180 degrees"));
+  connect(align_rotate180Act, SIGNAL(triggered()), this, SLOT(align_rotate180()));
+
+  align_rotate270Act = new QAction(tr("Rotate 270 degrees"),this);
+  align_rotate270Act->setStatusTip(tr("Rotate 270 degrees"));
+  connect(align_rotate270Act, SIGNAL(triggered()), this, SLOT(align_rotate270()));
+
+  align_flip_against_x_axisAct = new QAction(tr("Flip against x axis"),this);
+  align_flip_against_x_axisAct->setStatusTip(tr("Flip against x axis"));
+  connect(align_flip_against_x_axisAct, SIGNAL(triggered()), this, SLOT(align_flip_against_x_axis()));
+
+  align_flip_against_y_axisAct = new QAction(tr("Flip against y axis"),this);
+  align_flip_against_y_axisAct->setStatusTip(tr("Flip against y axis"));
+  connect(align_flip_against_y_axisAct, SIGNAL(triggered()), this, SLOT(align_flip_against_y_axis()));
+
+  performAlignmentOfClosePolysAct = new QAction(tr("Guess alignment"),this);
+  performAlignmentOfClosePolysAct->setStatusTip(tr("Guess alignment"));
+  connect(performAlignmentOfClosePolysAct, SIGNAL(triggered()), this, SLOT(performAlignmentOfClosePolys()));
+  ////////////////////////////////////////////
+
+  turnOnMovePolysAct = new QAction(tr("Move polygons (Shift-Mouse)"),this);
+  turnOnMovePolysAct->setStatusTip(tr("Move polygons (Shift-Mouse)"));
+  //turnOnMovePolysAct->setShortcut(0);
+  connect(turnOnMovePolysAct, SIGNAL(triggered()), this, SLOT(turnOnMovePolys()));
+
+  turnOnMoveVerticesAct = new QAction(tr("Move vertices (Shift-Mouse)"),this);
+  turnOnMoveVerticesAct->setStatusTip(tr("Move vertices (Shift-Mouse)"));
+  //turnOnMoveVerticesAct->setShortcut(0);
+  connect(turnOnMoveVerticesAct, SIGNAL(triggered()), this, SLOT(turnOnMoveVertices()));
+
+  turnOnMoveEdgesAct = new QAction(tr("Move edges (Shift-Mouse)"),this);
+  turnOnMoveEdgesAct->setStatusTip(tr("Move edges (Shift-Mouse)"));
+  //turnOnMoveEdgesAct->setShortcut(0);
+  connect(turnOnMoveEdgesAct, SIGNAL(triggered()), this, SLOT(turnOnMoveEdges()));
+
+  insertVertexAct = new QAction(tr("Insert vertex on edge"),this);
+  insertVertexAct->setStatusTip(tr("Insert vertex on edge"));
+  connect(insertVertexAct, SIGNAL(triggered()), this, SLOT(insertVertex()));
+
+  deleteVertexAct = new QAction(tr("Delete vertex"),this);
+  deleteVertexAct->setStatusTip(tr("Delete vertex"));
+  connect(deleteVertexAct, SIGNAL(triggered()), this, SLOT(deleteVertex()));
+
+  copyPolyAct = new QAction(tr("Copy polygon"),this);
+  copyPolyAct->setStatusTip(tr("Copy polygon"));
+  connect(copyPolyAct, SIGNAL(triggered()), this, SLOT(copyPoly()));
+
+  pastePolyAct = new QAction(tr("Paste polygon"),this);
+  pastePolyAct->setStatusTip(tr("Paste polygon"));
+  connect(pastePolyAct, SIGNAL(triggered()), this, SLOT(pastePoly()));
+
+  reversePolyAct = new QAction(tr("Reverse orientation"),this);
+  reversePolyAct->setStatusTip(tr("Reverse orientation"));
+  connect(reversePolyAct, SIGNAL(triggered()), this, SLOT(reversePoly()));
+
+  pvExitAct = new QAction(tr("Exit"),this);
+  connect(pvExitAct, SIGNAL(triggered()), m_parent, SLOT(forceQuit()));
+
+// add 20 actions to menu menuMenu
+  menu.addAction(saveMarkAct);
+  menu.addAction(toggleNmScaleAct);
+  menu.addAction(create45DegreeIntPolyAct);
+  menu.addAction(createArbitraryPolyAct);
+  menu.addAction(deletePolyAct);
+  menu.addSeparator();
+  menu.addAction(toggleAlignModeAct);
+  if (m_alignMode) {
+      menu.addAction(align_rotate90Act);
+      menu.addAction(align_rotate180Act);
+      menu.addAction(align_rotate270Act);
+      menu.addAction(align_flip_against_x_axisAct);
+      menu.addAction(align_flip_against_y_axisAct);
+      menu.addAction(performAlignmentOfClosePolysAct);
+  }
+  menu.addSeparator();
+  menu.addAction(turnOnMovePolysAct);
+  menu.addAction(turnOnMoveVerticesAct);
+  menu.addAction(turnOnMoveEdgesAct);
+  menu.addAction(insertVertexAct);
+  menu.addAction(deleteVertexAct);
+  menu.addAction(copyPolyAct);
+  menu.addAction(pastePolyAct);
+  menu.addAction(reversePolyAct);
+
+// #### END GEN CODE ############################################## 
+  menu.addSeparator();
+  menu.addAction(pvExitAct);
+
+#if 0 // 000000000000000000000000000000000000000000000000000000000000000
+    // menu.insertItem("Save mark at point", this, SLOT(saveMark()));
+    QAction *saveMarkAct = new QAction(tr("Save mark at point"),this);
+    saveMarkAct->setStatusTip(tr("Save mark at point"));
+    //saveMarkAct->setShortcut(Qt::CTRL+Qt::Key_O);
+    connect(saveMarkAct, SIGNAL(triggered()), this, SLOT(saveMark()));
+
+    // menu.insertItem("Use nm scale", this, SLOT(toggleNmScale()), 0, id);
+    // menu.setItemChecked(id, m_useNmScale);
+    QAction *toggleNmScaleAct = new QAction(tr("Toggle nm scale"), this);
+    toggleNmScaleAct->setStatusTip(tr("Toggle use of nm scale."));
+    connect(toggleNmScaleAct, SIGNAL(triggered()), this, SLOT(toggleNmScale()));
+    
+    id++;
+  
+    // menu.insertItem("Create 45-degree integer polygon", this, SLOT(create45DegreeIntPoly()));
+    QAction *create45DegreeIntPolyAct = new QAction(tr("Create Poly 45 degs."),this);
+    create45DegreeIntPolyAct->setStatusTip(tr("Create 45-degree integer polygon."));
+    connect(create45DegreeIntPolyAct, SIGNAL(triggered()), this, SLOT(create45DegreeIntPoly()));
+
+    // menu.insertItem("Create arbitrary polygon", this, SLOT(createArbitraryPoly()));
+    QAction *createArbitraryPolyAct = new QAction(tr("Create arbitrary polygon"),this);
+    connect(createArbitraryPolyAct, SIGNAL(triggered()), this, SLOT(createArbitraryPoly()));
+
+    // menu.insertItem("Delete polygon (Alt-Shift-Mouse)", this, SLOT(deletePoly()));
+    QAction *deletePolyAct = new QAction(tr("Delete Poly (Atl+Sh-Mouse)"),this);
+    connect(deletePolyAct, SIGNAL(triggered()), this, SLOT(deletePoly()));
+
+    //menu.addSeparator();
+
+    // menu.insertItem("Align mode", this, SLOT(toggleAlignMode()), 0, id);
+    // menu.setItemChecked(id, m_alignMode);
+    QAction *toggleAlignModeAct = new QAction(tr("Align Mode"),this);
+    connect(toggleAlignModeAct, SIGNAL(triggered()), this, SLOT(toggleAlignMode()));
+  id++;
+
+    // menu.insertItem("Rotate  90 degrees",  this, SLOT(align_rotate90()));
+    QAction *align_rotate90Act = new QAction(tr("Rotate  90 degrees"),this);
+  if (m_alignMode){
+        connect(align_rotate90Act, SIGNAL(triggered()), this, SLOT(align_rotate90()));
+
+        // menu.insertItem("Rotate 180 degrees",  this, SLOT(align_rotate180()));
+        // menu.insertItem("Rotate 270 degrees",  this, SLOT(align_rotate270()));
+        // menu.insertItem("Flip against x axis", this, SLOT(align_flip_against_x_axis()));
+        // menu.insertItem("Flip against y axis", this, SLOT(align_flip_against_y_axis()));
+        // menu.insertItem("Guess alignment", this, SLOT(performAlignmentOfClosePolys()));
+        //  menu.addSeparator();
+  }
+
+    // menu.insertItem("Move polygons (Shift-Mouse)", this, SLOT(turnOnMovePolys()), 0, id);
+    // menu.setItemChecked(id, m_movePolys);
+    // id++;
+
+    // menu.insertItem("Move vertices (Shift-Mouse)", this, SLOT(turnOnMoveVertices()), 0, id);
+    // menu.setItemChecked(id, m_moveVertices);
+    // id++;
+  
+    // menu.insertItem("Move edges (Shift-Mouse)", this, SLOT(turnOnMoveEdges()), 0, id);
+    // menu.setItemChecked(id, m_moveEdges);
+    // id++;
+  
+    // menu.insertItem("Insert vertex on edge", this, SLOT(insertVertex()));
+    // menu.insertItem("Delete vertex",         this, SLOT(deleteVertex()));
+    // menu.insertItem("Copy polygon",          this, SLOT(copyPoly()));
+    // menu.insertItem("Paste polygon",         this, SLOT(pastePoly()));
+    // menu.insertItem("Reverse orientation",   this, SLOT(reversePoly()));
+      
+    menu.addAction(saveMarkAct);
+    menu.addAction(toggleNmScaleAct);
+    menu.addAction(create45DegreeIntPolyAct);
+    menu.addAction(createArbitraryPolyAct);
+    menu.addAction(deletePolyAct);
+  menu.addSeparator();
+    menu.addAction(toggleAlignModeAct);
+
+    if (m_alignMode) {
+        menu.addAction(align_rotate90Act);
+    }
+#endif // 0000000000000000000000000000000000000000000000
+  menu.exec(E->globalPos());
+
+#endif
   return;
 }
 
@@ -1279,7 +1591,11 @@ void polyView::refreshPixmap(){
   // whenever possible for reasons of speed.
 
   m_pixmap = QPixmap(size());
-  m_pixmap.fill(this, 0, 0);
+#ifdef USE_QT4_DEFS // QPixmap.fill
+  m_pixmap.fill(this, 0, 0);    // Qt5 issues 'this function is deprecated, ignored'
+#else
+  m_pixmap.fill(Qt::black); // TODO: check this change...
+#endif
 
   QPainter paint(&m_pixmap);
   paint.initFrom(this);
@@ -1374,6 +1690,14 @@ void polyView::popUp(std::string msg){
   return;
 }
 
+/* 
+   getText(QWidget *parent, const QString &title, const QString &label, 
+   QLineEdit::EchoMode mode = QLineEdit::Normal, const QString &text = QString(), 
+   bool *ok = Q_NULLPTR, Qt::WindowFlags flags = Qt::WindowFlags(), 
+   Qt::InputMethodHints inputMethodHints = Qt::ImhNone)
+
+*/
+
 bool polyView::getStringFromGui(std::string title, std::string description,
                                 std::string inputStr,
                                 std::string & outputStr // output
@@ -1382,9 +1706,15 @@ bool polyView::getStringFromGui(std::string title, std::string description,
   outputStr = "";
 
   bool ok = false;
+#ifdef USE_QT4_DEFS
   QString text = QInputDialog::getText(title.c_str(), description.c_str(),
                                        QLineEdit::Normal, inputStr.c_str(),
                                        &ok, this );
+#else
+  QString text = QInputDialog::getText(this, title.c_str(), description.c_str(),
+                                       QLineEdit::Normal, inputStr.c_str(),
+                                       &ok );
+#endif
 
   if (ok) outputStr = text.toStdString();
 
@@ -1549,8 +1879,11 @@ void polyView::setBgFgColorsFromPrefs(){
     bgColor   = "black";
     qtBgColor = QColor(bgColor.c_str()); // fallback color
   }
+#ifdef USE_QT4_DEFS
   setBackgroundColor(qtBgColor);
-
+#else
+  // TODO: ????????????????
+#endif
   string fgColor = m_prefs.fgColor;
   if ( QColor(fgColor.c_str()) == QColor::Invalid ){
     fgColor = "white";
@@ -1855,13 +2188,14 @@ void polyView::createHighlightWithRealInputs(double xll, double yll, double xur,
   return;
 }
 
+#ifdef USE_QT4_DEFS
 void polyView::printCurrCoords(const Qt::ButtonState & state, // input
                                int & currX, int  & currY      // in-out
-                               ){
-
+                               )
+{
   // Snap or not the current point to the closest polygon vertex
   // and print its coordinates.
-
+    bool set_width = false;   // try without width
   double s;
   string unit;
   if (m_useNmScale){
@@ -1869,21 +2203,130 @@ void polyView::printCurrCoords(const Qt::ButtonState & state, // input
     unit = " (nm):";
   }else{
     s    = 1.0;
-    unit = ":     ";
+       unit = "";
   }
 
   int prec = 6, wid = prec + 6;
+    if (set_width) {  // prefer this off, and use max 15
   cout.precision(prec);
   cout.setf(ios::floatfield);
+    }
+    double wx, wy;
+    pixelToWorldCoords(currX, currY, wx, wy);
+    int len = 2*m_smallLen + 2*m_prefs.lineWidth; // big enough
 
+    if (state == (int)Qt::LeftButton) {
+        // Snap to the closest vertex with the left mouse button.
+        double min_x, min_y, min_dist;
+        int polyVecIndex, polyIndexInCurrPoly, vertIndexInCurrPoly;
+        findClosestPolyVertex(// inputs
+                          wx, wy, m_polyVec,
+                          // outputs
+                          polyVecIndex,
+                          polyIndexInCurrPoly,
+                          vertIndexInCurrPoly,
+                          min_x, min_y, min_dist
+                          );
+        wx = min_x; 
+        wy = min_y;
+        worldToPixelCoords(wx, wy,      // inputs
+                       currX, currY // outputs
+                       );
+    
+        // Save the point to plot. Call update to paint the point.
+        m_snappedPoints.push_back(QPoint(currX, currY));
+        update(currX - len, currY - len, 2*len, 2*len);
+    
+    } else if (state == ( (int)Qt::LeftButton | (int)Qt::AltModifier )
+            ||
+            state == ((int)Qt::MidButton)
+            ) 
+    {
+        // Don't snap with the alt-left button or the middle button.
+    
+        // Save the point to plot. Call update to paint the point.
+        m_nonSnappedPoints.push_back(QPoint(currX, currY));
+        int len = 2*m_smallLen + 2*m_prefs.lineWidth; // big enough
+        update(currX - len, currY - len, 2*len, 2*len);
+      
+    }
+    // hmmm, do not like this fixed width display TODO: make this a config value
+    if (set_width) {
+        cout << "Point" << unit << " ("
+           << setw(wid) << s*wx << ", "
+           << setw(wid) << s*wy << ")";
+        if (m_prevClickExists){
+            cout  << " dist from prev: ("
+              << setw(wid) << s*(wx - m_prevClickedX) << ", "
+              << setw(wid) << s*(wy - m_prevClickedY)
+              << ") Euclidean: "
+              << setw(wid) << s*sqrt( (wx - m_prevClickedX)*(wx - m_prevClickedX)
+                                      + 
+                                      (wy - m_prevClickedY)*(wy - m_prevClickedY)
+                                      );
+        }
+    } else {
+        cout.precision(15); // set maximum precision
+        cout << "Point: "
+           << wx << ", "
+           << wy;
+        if (m_prevClickExists) {
+            cout  << " from prev: " << unit << " "
+              << s*sqrt( (wx - m_prevClickedX)*(wx - m_prevClickedX) + 
+                         (wy - m_prevClickedY)*(wy - m_prevClickedY) );
+        }
+    }
+    cout << endl;
+  
+    m_prevClickExists = true;
+    m_prevClickedX    = wx;
+    m_prevClickedY    = wy;
+
+    return;
+}
+#else
+    // TODO: port coordinates output
+void polyView::printCurrCoords(const Qt::KeyboardModifiers & keymods, // input
+                               int & currX, int  & currY      // in-out
+                               )
+{
+    size_t state = 0;
+    if (m_mouseButs & Qt::LeftButton) {
+        state = Qt::LeftButton;
+        if (m_mouseMods & Qt::AltModifier) {
+            state |= Qt::AltModifier;
+        }
+    } else if (m_mouseButs & Qt::MidButton) {
+        state = Qt::MidButton;
+    } else if (m_mouseButs & Qt::RightButton) {
+        state = Qt::RightButton;
+        return; // this is the context menu - no cordinate output
+    }
+
+    // Snap or not the current point to the closest polygon vertex
+    // and print its coordinates.
+    bool set_width = false;   // try without width
+    double s;
+    string unit;
+    if (m_useNmScale) {
+        s   = m_nmScale;    // TODO: Not USED - file input 'scale.txt' disabled
+        unit = " (nm):";    // Assumes wsg84 lon lat coord, and uses Haversine to compute distance
+    } else {
+       s    = 1.0;
+       unit = "RMS:";
+    }
+
+    int prec = 6, wid = prec + 6;
+    if (set_width) {  // prefer this off, and use max 15
+        cout.precision(prec);
+        cout.setf(ios::floatfield);
+    }
   double wx, wy;
   pixelToWorldCoords(currX, currY, wx, wy);
   int len = 2*m_smallLen + 2*m_prefs.lineWidth; // big enough
 
   if (state == (int)Qt::LeftButton){
-
     // Snap to the closest vertex with the left mouse button.
-
     double min_x, min_y, min_dist;
     int polyVecIndex, polyIndexInCurrPoly, vertIndexInCurrPoly;
     findClosestPolyVertex(// inputs
@@ -1894,7 +2337,8 @@ void polyView::printCurrCoords(const Qt::ButtonState & state, // input
                           vertIndexInCurrPoly,
                           min_x, min_y, min_dist
                           );
-    wx = min_x; wy = min_y;
+        wx = min_x; 
+        wy = min_y;
     worldToPixelCoords(wx, wy,      // inputs
                        currX, currY // outputs
                        );
@@ -1906,8 +2350,8 @@ void polyView::printCurrCoords(const Qt::ButtonState & state, // input
   }else if (state == ( (int)Qt::LeftButton | (int)Qt::AltModifier )
             ||
             state == ((int)Qt::MidButton)
-            ){
-
+            ) 
+    {
     // Don't snap with the alt-left button or the middle button.
 
     // Save the point to plot. Call update to paint the point.
@@ -1916,7 +2360,9 @@ void polyView::printCurrCoords(const Qt::ButtonState & state, // input
     update(currX - len, currY - len, 2*len, 2*len);
 
   }
-
+    //////////////////////////////////////////////////////////////////////////////
+    // hmmm, do not like this fixed width display TODO: make this a config value
+    if (set_width) {
   cout << "Point" << unit << " ("
        << setw(wid) << s*wx << ", "
        << setw(wid) << s*wy << ")";
@@ -1930,6 +2376,34 @@ void polyView::printCurrCoords(const Qt::ButtonState & state, // input
                                   (wy - m_prevClickedY)*(wy - m_prevClickedY)
                                   );
   }
+    } else {
+
+        cout.precision(15); // set maximum precision
+        cout << "Point: "
+           << wx << ", "
+           << wy;
+        if (m_prevClickExists) {
+            double dist;
+            if (!m_useNmScale) {
+                // pythag sqrt(sum of shares) - no prob
+                // ok for quite small distances - difficulty is scaling
+                // Previous was through an external scale.txt file with 'scale 1234'!
+                dist = s*sqrt( (wx - m_prevClickedX)*(wx - m_prevClickedX) + 
+                               (wy - m_prevClickedY)*(wy - m_prevClickedY) );
+            } else {
+                // Haversine
+                dist = DistanceInMeters(m_prevClickedY, m_prevClickedX, wy, wx);
+                if (dist < 1000)
+                    unit = "(m)";
+                else {
+                    dist /= 1000;
+                    dist *= KM2NM;
+                    unit = "(nm)";
+                }
+            }
+            cout  << " from prev: " << unit << " " << dist;
+        }
+    }
   cout << endl;
 
   m_prevClickExists = true;
@@ -1938,7 +2412,7 @@ void polyView::printCurrCoords(const Qt::ButtonState & state, // input
 
   return;
 }
-
+#endif
 
 void polyView::updateRubberBand(QRect & R){
 
@@ -2047,6 +2521,11 @@ void polyView::toggleAnno(){
   m_showAnnotations   = !m_showAnnotations;
   m_showVertIndexAnno = false;
   m_showLayerAnno     = false;
+#ifdef ADD_PREF_INI
+  utils::writeSetting("m_showAnnotations",m_showAnnotations);
+  utils::writeSetting("m_showVertIndexAnno",m_showVertIndexAnno);
+  utils::writeSetting("m_showLayerAnno",m_showLayerAnno);
+#endif // ADD_PREF_INI
   refreshPixmap();
 }
 
@@ -2054,6 +2533,11 @@ void polyView::toggleVertIndexAnno(){
   m_showVertIndexAnno = !m_showVertIndexAnno;
   m_showAnnotations   = false;
   m_showLayerAnno     = false;
+#ifdef ADD_PREF_INI
+  utils::writeSetting("m_showAnnotations",m_showAnnotations);
+  utils::writeSetting("m_showVertIndexAnno",m_showVertIndexAnno);
+  utils::writeSetting("m_showLayerAnno",m_showLayerAnno);
+#endif // ADD_PREF_INI
   refreshPixmap();
 }
 
@@ -2061,6 +2545,11 @@ void polyView::toggleLayerAnno(){
   m_showLayerAnno     = !m_showLayerAnno;
   m_showAnnotations   = false;
   m_showVertIndexAnno = false;
+#ifdef ADD_PREF_INI
+  utils::writeSetting("m_showAnnotations",m_showAnnotations);
+  utils::writeSetting("m_showVertIndexAnno",m_showVertIndexAnno);
+  utils::writeSetting("m_showLayerAnno",m_showLayerAnno);
+#endif // ADD_PREF_INI
   refreshPixmap();
 }
 
@@ -2427,6 +2916,8 @@ void polyView::createArbitraryPoly(){
   setPolyDrawCursor();
 }
 
+#ifdef ADD_QT4_DEF
+//////////////////////////////////////////////////////////////
 void polyView::insertLabel(){
 
   string inputStr, outputStr;
@@ -2487,6 +2978,11 @@ void polyView::deleteLabel(){
   refreshPixmap();
   return;
 }
+
+#endif // TODO: Unsupported otions
+
+// eof
+
 
 void polyView::insertVertex(){
 
@@ -2608,10 +3104,12 @@ void polyView::toggleNmScale(){
 
   m_useNmScale = !m_useNmScale;
   if (!m_useNmScale){
+      //  Pythagoras - root sum sides squared
     cout << "Using the dbu scale" << endl;
     return;
   }
 
+#if 0 // 00000000000000000000000000000000000000000000000000000000000
   ifstream scaleHandle(m_nmScaleFile.c_str());
   if (!scaleHandle){
     cerr << "File " << m_nmScaleFile << " does not exist" << endl;
@@ -2633,6 +3131,7 @@ void polyView::toggleNmScale(){
     m_useNmScale = false;
     return;
   }
+#endif // 0000000000000000000000000000000000
 
   cout << "Using the nm scale factor " << m_nmScale << endl;
 
@@ -2650,7 +3149,13 @@ void polyView::moveSelectedPolys(){
 }
 
 void polyView::deselectPolysDeleteHlts(){
+
+    size_t cnt = m_highlights.size();
+    // a vector of dPoly objects
   m_highlights.clear();
+
+    if (cnt)
+        cout << "Cleared " << cnt << " hightlights" << endl;
 
   markPolysInHlts(m_polyVec, m_highlights, // Inputs
                   m_selectedPolyIndices    // Outputs
@@ -2892,15 +3397,39 @@ void polyView::showFilesChosenByUser(){
   return;
 }
 
+/* ------------------------------------------------------------------
+   Qt5
+   getOpenFileName(
+        QWidget *parent = Q_NULLPTR, 
+        const QString &caption = QString(), 
+        const QString &dir = QString(), 
+        const QString &filter = QString(), 
+        QString *selectedFilter = Q_NULLPTR, 
+        Options options = Options() )
+
+ * ------------------------------------------------------------------ */
+static QString caption = ("Choose a file");
+static QString filter = ("XG Files (*.xg *.ly* *.pol)");
+
 void polyView::openPoly(){
 
-  QString s = QFileDialog::getOpenFileName(QDir::currentDirPath(),
+    //QString dir = QDir::currentDirPath();
+#ifdef USE_QT4_DEFS
+  QString s = Q3FileDialog::getOpenFileName(QDir::currentDirPath(),
                                            "(*.xg *.ly* *.pol)",
                                            this,
                                            "Open file dialog"
                                            "Choose a file"
                                            );
 
+#else
+    // TODO: Improve OPENFILE dialog defaults...
+    const char *cwd = getcwd(NULL, 0);
+    QString dir = "";
+    if (cwd)
+        dir = cwd;
+    QString s = QFileDialog::getOpenFileName(this, caption, dir, filter);
+#endif
   if (s.length() == 0) return;
 
   string fileName = s.toStdString();
@@ -2912,6 +3441,7 @@ void polyView::openPoly(){
   m_polyOptionsVec.back().readPolyFromDisk = true;
 
   dPoly poly;
+  // poly.reset();
   bool success = readOnePoly(// inputs
                              m_polyOptionsVec.back().polyFileName,
                              m_polyOptionsVec.back().plotAsPoints,
@@ -2971,10 +3501,15 @@ bool polyView::readOnePoly(// inputs
 }
 
 
-void polyView::saveOnePoly(){
-
-  QString s = QFileDialog::getSaveFileName(this,  "Save as one file", "savedPoly.xg", "(*.xg)"
-                                           );
+void polyView::saveOnePoly()
+{
+//#ifdef _MSC_VER // getSaveFileName()
+    QString filter = "(*.xg)";
+#ifdef USE_QT4_DEFS
+    QString s = Q3FileDialog::getSaveFileName("","",this,"Save as one file","Save as one file",&filter);
+#else
+    QString s = QFileDialog::getSaveFileName(this,  "Save as one file", "savedPoly.xg", "(*.xg)");
+#endif
   if (s.length() == 0) return;
 
   string fileName = s.toStdString();
@@ -2995,6 +3530,36 @@ void polyView::overwriteMultiplePolys(){
   bool overwrite = true;
   writeMultiplePolys(overwrite);
 }
+#ifdef ADD_IMAGE_SAVE
+// Do I have to do the scaling, like
+// pixmap.scaled(32, 32, Qt::IgnoreAspectRatio, Qt::FastTransformation));
+// hmmm, it seems NOT, the pixel map is already 'sized'
+// WOW, it really seems all that simple ;=))
+void polyView::saveScreenImage()
+{
+    const QPixmap *img = &m_pixmap;
+    QString saveFilename = QFileDialog::getSaveFileName(this, "Save as", "Choose a filename", "PNG(*.png);; TIFF(*.tiff *.tif);; JPEG(*.jpg *.jpeg)");
+    if (saveFilename.length() == 0)
+        return;
+    QString saveExtension = "PNG";
+    int pos = saveFilename.lastIndexOf('.');
+    if (pos >= 0)
+        saveExtension = saveFilename.mid(pos + 1);
+    else 
+        saveFilename += ".png";
+
+#ifdef USE_QT4_DEFS
+    int res = img->save(saveFilename,saveExtension);
+#else
+    int res = img->save(saveFilename, saveExtension.toStdString().c_str());
+#endif
+    if (!res) {
+        QMessageBox::warning(this, "File could not be saved!", "ok", QMessageBox::Ok);
+    }
+
+}
+#endif // ADD_IMAGE_SAVE
+
 
 void polyView::saveAsMultiplePolys(){
   bool overwrite = false;
@@ -3036,6 +3601,17 @@ void polyView::changeOrder(){
 
 }
 
+#ifdef USE_QT4_DEFS // ref Q3PointArray
+bool polyView::isPolyZeroDim(const Q3PointArray & pa){
+
+  int numPts = pa.size();
+  for (int s = 1; s < numPts; s++){
+    if (pa[0] != pa[s]) return false;
+  }
+  
+  return true;
+}
+#else 
 bool polyView::isPolyZeroDim(const QPolygon & pa){
 
   int numPts = pa.size();
@@ -3046,6 +3622,7 @@ bool polyView::isPolyZeroDim(const QPolygon & pa){
   return true;
 }
 
+#endif
 void polyView::initTextOnScreenGrid(std::vector< std::vector<int> > & Grid){
 
   // Split the screen into numGridPts x numGridPts rectangles.  For
@@ -3304,8 +3881,21 @@ void polyView::runCmd(std::string cmd){
     }
 
   }
-
+  if ((cmdName == "-h" )|| (cmdName == "--help" )||
+      (cmdName == "-?" )|| (cmdName == "?")) 
+  {
+      cerr << "Valid commands:" << endl;
+      cerr << "Single: 'enforce45' 'poly_diff'" << endl;
+      cerr << "with 2 inputs: 'mark' xll yll" << endl;
+      cerr << "With 4 inputs: 'view' 'clip' 'erasePolysInHlt' xll yll widx widy" << endl; 
+      cerr << "Others: 'translate' shift_x shift_y ..." << endl;
+      cerr << "'translate_selected' shift_x shift_y" << endl;
+      cerr << "'rotate_selected' angle" << endl;
+      cerr << "'scale_selected' scale" << endl;
+      cerr << "'transform_selected' 4 matrix" << endl;
+  } else {
   cerr << "Invalid command: " << cmd << endl;
+  }
 
   return;
 }
@@ -3414,3 +4004,49 @@ void polyView::deleteSelectedPolys(){
 
   return;
 }
+
+#ifdef ADD_PREF_INI
+void polyView::writeINI()
+{
+    polyOptions *popt = &m_prefs;
+    QString s;
+    setINIFile();
+    // writeSetting("INIFile", m_sSettingsFile);
+    writeSetting("fontSize",popt->fontSize);
+    writeSetting("lineWidth",popt->lineWidth);
+    writeSetting("isGridOn",popt->isGridOn);
+    writeSetting("gridSize",popt->gridSize);
+    writeSetting("gridWidth",popt->gridWidth);
+    writeSetting("isLatLonOn",popt->isLatLonOn);
+    s = QString::fromStdString(popt->bgColor);
+    writeSetting("bgColor",s);
+    s = QString::fromStdString(popt->fgColor);
+    writeSetting("fgColor",s);
+    s = QString::fromStdString(popt->cmdLineColor);
+    writeSetting("cmdLineColor",s);
+    s = QString::fromStdString(popt->gridColor);
+    writeSetting("gridColor",s);
+    s = QString::fromStdString(popt->latlonColor);
+    writeSetting("latlonColor",s);
+    s = QString::fromStdString(popt->polyFileName);
+    writeSetting("polyFileName",s);
+
+    writeSetting("useNmScale", m_useNmScale);
+}
+
+void polyView::readINI()
+{
+    //polyOptions *popt = &m_prefs;
+    //QString s;
+    //setINIFile();
+    // QSettings settings(m_sSettingsFile, QSettings::IniFormat);
+    // proceceed to read settings...
+    // or use a utility functions to do the same...
+    m_showAnnotations    = utils::loadSettingBool("m_showAnnotations",m_showAnnotations);
+    m_showVertIndexAnno  = utils::loadSettingBool("m_showVertIndexAnno",m_showVertIndexAnno);
+    m_showLayerAnno      = utils::loadSettingBool("m_showLayerAnno",m_showLayerAnno);
+    m_useNmScale         = utils::loadSettingBool("useNmScale",false);
+
+}
+#endif // ADD_PREF_INI
+

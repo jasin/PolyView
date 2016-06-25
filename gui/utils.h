@@ -21,11 +21,15 @@
 // THE SOFTWARE.
 #ifndef UTILS_H
 #define UTILS_H
+#ifdef ADD_PREF_INI
+#include <qstring.h>
+#include <qvariant.h>
+#endif // ADD_PREF_INI
 #include <cmath>
 #include <iostream>
 #include <string>
 #include <vector>
-#include <geom/polyUtils.h>
+#include "../geom/polyUtils.h"
 
 enum closedPolyInfo{
   // If an array of points as read from file has the first vertex equal to the last
@@ -36,7 +40,9 @@ enum closedPolyInfo{
 };
 
 
-struct polyOptions{
+class polyOptions 
+{
+public:
   // Each polygon file has these options
   bool            plotAsPoints;
   bool            isPolyFilled;
@@ -47,14 +53,18 @@ struct polyOptions{
   bool            isGridOn;
   double          gridSize;
   int             gridWidth;
+  bool            isLatLonOn;   // TODO: Add lat lon 'grid' - saved/rest, but UNUSED
   bool            readPolyFromDisk;
+ 
   std::string     bgColor;
   std::string     fgColor;
   std::string     cmdLineColor;
   std::string     gridColor;
+  std::string     latlonColor;  // TODO: Add lat lon 'grid' - saved/rest, but UNUSED
   std::string     polyFileName;
 
   polyOptions(){
+      // set DEFAULTS
     plotAsPoints     = false;
     isPolyFilled     = false;
     isPolyClosed     = readClosedPolyInfoFromFile;
@@ -62,6 +72,7 @@ struct polyOptions{
     lineWidth        = 1;
     useCmdLineColor  = false;
     isGridOn         = false;
+    isLatLonOn      = false; 
     gridWidth        = 1;
     gridSize         = -1;
     readPolyFromDisk = true;
@@ -69,12 +80,15 @@ struct polyOptions{
     fgColor          = "white";
     cmdLineColor     = "green";
     gridColor        = "white";
+    latlonColor     = "white";
     polyFileName     = "unnamed.xg";
   }
 
 };
 
-struct cmdLineOptions{
+class cmdLineOptions
+{
+public:
   std::vector<polyOptions> polyOptionsVec;
 };
 
@@ -102,7 +116,19 @@ namespace utils{
   std::string replaceAll(std::string result,
                          const std::string & replaceWhat,
                          const std::string & replaceWithWhat);
+#ifdef ADD_PREF_INI
+    void setINIFile();
+    void loadSettings(polyOptions &opt, int & windowWidX, int & windowWidY);
+    int loadSettingInt(const QString &key, int def);
+    std::string loadSettingStdString(const QString &key, std::string def);
+    bool loadSettingBool(const QString &key, bool def );
+    void writeSetting(const QString &key, const QVariant &variant);
+#endif // ADD_PREF_INI
 
 }
+
+// Uses haversine formula to compute great circle distance 
+// between (assumed) wsg84 lon lat coordinates. TODO: Toggle m_useNmScale
+extern double DistanceInMeters(double lat1, double lon1, double lat2, double lon2);
 
 #endif
