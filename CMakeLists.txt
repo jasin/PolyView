@@ -19,7 +19,7 @@ project( polyView )
 
 option( ADD_SAVE_IMAGE "set ON the add a save to an image file."               ON  )
 option( ADD_PREF_INI   "set ON the add a read/write preferecnes to INI file."  ON  )
-option( QT5_BUILD      "Set ON to find and link with Qt5."                     OFF )
+option( QT5_BUILD      "Set OFF to find and link with Qt4..."                  ON  )
 
 # ### NOTE: *** Adjust version.txt when required ***
 # read 'version' file into a variable (stripping any newlines or spaces)
