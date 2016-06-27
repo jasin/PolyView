@@ -32,7 +32,7 @@
 
 #if (defined(_MSC_VER) && !defined(round))
 // provide a 'double round(double)' replacement, at least for MSVC WIN32 build
-static double round(double d)
+static inline double round(double d)
 {
     int res;
     if (d < 0.0) {

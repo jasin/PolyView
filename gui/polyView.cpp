@@ -58,7 +58,7 @@
 #include <qpainter.h>
 #include "polyView.h"
 #include <qmessagebox.h>
-#ifdef WIN32
+#ifdef _WIN32
 #include <direct.h> // for _getcwd
 #define getcwd _getcwd
 #endif  // WIN32
