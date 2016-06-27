@@ -82,6 +82,7 @@ using namespace utils;
 polyView::polyView(QWidget *parent, const cmdLineOptions & options): QWidget(parent){
 
     m_parent = parent;
+    color = Qt::black;
   // Choose which files to hide/show in the GUI
   QObject::connect(m_chooseFilesDlg.getFilesTable(),
                    SIGNAL(itemSelectionChanged()),
@@ -1591,11 +1592,12 @@ void polyView::refreshPixmap(){
   // whenever possible for reasons of speed.
 
   m_pixmap = QPixmap(size());
-#ifdef USE_QT4_DEFS // QPixmap.fill
-  m_pixmap.fill(this, 0, 0);    // Qt5 issues 'this function is deprecated, ignored'
-#else
-  m_pixmap.fill(Qt::black); // TODO: check this change...
-#endif
+// Should not need this Qt4 specific code.
+//#ifdef USE_QT4_DEFS // QPixmap.fill
+//  m_pixmap.fill(this, 0, 0);    // Qt5 issues 'this function is deprecated, ignored' 
+//#else
+  m_pixmap.fill(color); // Should work for Qt5/4 Verify Geoff??
+//#endif
 
   QPainter paint(&m_pixmap);
   paint.initFrom(this);
@@ -1879,11 +1881,12 @@ void polyView::setBgFgColorsFromPrefs(){
     bgColor   = "black";
     qtBgColor = QColor(bgColor.c_str()); // fallback color
   }
-#ifdef USE_QT4_DEFS
-  setBackgroundColor(qtBgColor);
-#else
-  // TODO: ????????????????
-#endif
+// Should not need this specific Qt4 code
+//#ifdef USE_QT4_DEFS 
+//  setBackgroundColor(qtBgColor);
+//#else
+  color = qtBgColor; 
+//#endif
   string fgColor = m_prefs.fgColor;
   if ( QColor(fgColor.c_str()) == QColor::Invalid ){
     fgColor = "white";

@@ -403,6 +403,7 @@ private:
  QAction *reversePolyAct;
 // #### END GEN HEADER CODE ############################################## 
  QAction *pvExitAct;
+ QColor color;
 
 };
 
